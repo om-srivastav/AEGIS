@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.models.schemas import Diagnosis, DiagnosisCandidate, DiagnosisStatus, EventType
 from app.providers.reasoning import DiagnosisRequest, MockProvider, ReasoningProvider
+from app.providers.model_contracts import Fault
 from app.services.evidence import FactExtractor
 from app.services.runner import RunService
 
@@ -82,7 +83,8 @@ class DiagnosisService:
         self.validator = DiagnosisValidator()
         self.diagnoses: dict[str, Diagnosis] = {}
 
-    async def diagnose(self, run_id: str) -> Diagnosis:
+    async def diagnose(self, run_id: str, provider: ReasoningProvider | None = None) -> Diagnosis:
+        active_provider = provider or self.provider
         run = self.run_service.get(run_id)
         if not run:
             raise KeyError(run_id)
@@ -93,13 +95,40 @@ class DiagnosisService:
             allowed_event_ids=frozenset(e.event_id for e in run.events),
             allowed_fact_ids=frozenset(f.fact_id for f in evidence.facts),
         )
-        candidate = await self.provider.diagnose(request)
+        try:
+            candidate = await active_provider.diagnose(request)
+        except Fault as exc:
+            metadata = getattr(active_provider, "last_metadata", None)
+            if metadata is not None:
+                current = dict(run.model_execution or {"schema_version": "1"})
+                current["diagnostic"] = {**metadata, "validation_status": "provider_failure"}
+                run.model_execution = current
+            diagnosis = Diagnosis(
+                run_id=run.run_id,
+                trace_hash=run.trace_hash or "",
+                observation_ids=[o.observation_id for o in evidence.observations],
+                hypotheses=[],
+                status=DiagnosisStatus.INCONCLUSIVE,
+                provider=active_provider.name,
+                validation_errors=[f"provider:{exc.kind}:{exc.code}"],
+            )
+            self.diagnoses[diagnosis.diagnosis_id] = diagnosis
+            return diagnosis
+
         errors = self.validator.validate(request, candidate)
         status = (
             DiagnosisStatus.REJECTED if errors
             else DiagnosisStatus.SUPPORTED if candidate.hypotheses
             else DiagnosisStatus.INCONCLUSIVE
         )
+        metadata = getattr(active_provider, "last_metadata", None)
+        if metadata is not None:
+            current = dict(run.model_execution or {"schema_version": "1"})
+            current["diagnostic"] = {
+                **metadata,
+                "validation_status": "rejected" if errors else status.value,
+            }
+            run.model_execution = current
         diagnosis = Diagnosis(
             run_id=run.run_id,
             trace_hash=run.trace_hash or "",
@@ -110,7 +139,7 @@ class DiagnosisService:
             downstream_event_ids=[] if errors else candidate.downstream_event_ids,
             probes=[] if errors else candidate.probes,
             status=status,
-            provider=self.provider.name,
+            provider=active_provider.name,
             validation_errors=errors,
         )
         self.diagnoses[diagnosis.diagnosis_id] = diagnosis

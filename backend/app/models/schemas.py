@@ -33,6 +33,7 @@ class EventType(str, Enum):
     RECOVERY = "recovery"
     VALIDATION = "validation"
     RUN_FINISHED = "run_finished"
+    MODEL = "model"
 
 
 class PerturbationKind(str, Enum):
@@ -163,6 +164,9 @@ class RunRecord(StrictModel):
     evaluation_id: str | None = None
     evaluation_case: str | None = None
     evaluation_arm: Literal["baseline", "candidate"] | None = None
+    regression_case_id: str | None = None
+    regression_case_version: int | None = None
+    model_execution: dict[str, Any] | None = None
 
 
 class FailureCategory(str, Enum):
@@ -356,3 +360,120 @@ class EvaluationRecord(StrictModel):
     decision: GateDecision
     reasons: list[str] = Field(default_factory=list)
     causal_statement: str
+    suite_snapshot: "EvaluationSuiteSnapshot | None" = None
+    case_results: list["CasePairResult"] = Field(default_factory=list)
+    metrics: "ReliabilityMetrics | None" = None
+    evaluation_complete: bool = True
+
+
+class CaseOutcome(str, Enum):
+    PASS = "PASS"
+    FAIL = "FAIL"
+    INVALID = "INVALID"
+    INCOMPLETE = "INCOMPLETE"
+
+
+class PairTransition(str, Enum):
+    PRESERVED = "preserved"      # PASS -> PASS
+    IMPROVED = "improved"        # FAIL -> PASS
+    REGRESSION = "regression"    # PASS -> FAIL
+    UNRESOLVED = "unresolved"    # FAIL -> FAIL
+    INVALID = "invalid"
+
+
+class ExpectedCheck(StrictModel):
+    check_id: str
+    required: bool = True
+
+
+class ExposureRequirement(StrictModel):
+    mode: Literal["none", "must_activate"] = "none"
+    perturbation_spec_hash: str | None = None
+
+
+class RegressionCase(StrictModel):
+    schema_version: Literal["1"] = "1"
+    case_id: str = Field(default_factory=lambda: str(uuid4()))
+    case_version: int = Field(default=1, ge=1)
+    supersedes_version: int | None = None
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=500)
+    source_run_id: str
+    scenario_manifest_id: str
+    scenario_manifest_hash: str
+    initial_fixture_ref: str
+    initial_fixture_hash: str
+    task_contract_hash: str
+    validator_bundle_hash: str
+    execution_contract_hash: str
+    expected_checks: list[ExpectedCheck] = Field(min_length=1)
+    exposure_requirement: ExposureRequirement = Field(default_factory=ExposureRequirement)
+    created_at: datetime = Field(default_factory=utcnow)
+    case_content_hash: str = ""
+    active: bool = True
+
+
+class SuiteMember(StrictModel):
+    case_id: str
+    case_version: int = Field(ge=1)
+    case_content_hash: str
+    role: Literal["current", "clean", "historical"]
+    must_pass_candidate: bool = False
+
+
+class EvaluationSuiteSnapshot(StrictModel):
+    schema_version: Literal["1"] = "1"
+    suite_id: str = Field(default_factory=lambda: str(uuid4()))
+    suite_hash: str = ""
+    members: list[SuiteMember] = Field(min_length=1)
+    base_policy_id: str
+    base_policy_hash: str
+    candidate_policy_id: str
+    candidate_policy_hash: str
+    gate_version: Literal["deterministic-regression-v1"] = "deterministic-regression-v1"
+    repetitions_per_arm: Literal[1] = 1
+
+
+class CasePairResult(StrictModel):
+    case_id: str
+    case_version: int
+    role: Literal["current", "clean", "historical"]
+    baseline_run_id: str
+    candidate_run_id: str
+    baseline_outcome: CaseOutcome
+    candidate_outcome: CaseOutcome
+    transition: PairTransition
+    comparison: RunComparison
+    valid_pair: bool
+    reasons: list[str] = Field(default_factory=list)
+
+
+class ReliabilityMetrics(StrictModel):
+    scheduled_cases: int
+    baseline_valid: int
+    candidate_valid: int
+    valid_pairs: int
+    baseline_passes: int
+    candidate_passes: int
+    improvement_count: int
+    regression_count: int
+    unresolved_failure_count: int
+    preserved_count: int
+    baseline_coverage: float | None = None
+    candidate_coverage: float | None = None
+    baseline_case_success_rate: float | None = None
+    candidate_case_success_rate: float | None = None
+    paired_net_change: float | None = None
+    invalid_or_incomplete_pairs: int = 0
+
+
+class Mission04EvaluationRequest(StrictModel):
+    current_case_id: str
+    clean_case_id: str
+    historical_case_ids: list[str] = Field(default_factory=list)
+
+
+class RegressionCaseCreate(StrictModel):
+    source_run_id: str
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=500)

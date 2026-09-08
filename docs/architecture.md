@@ -63,3 +63,47 @@ The scoped causal statement is:
 > Enabling the bounded resource re-observation policy changed the moved-resource scenario from failure to success under matched deterministic conditions; the clean case remained correct.
 
 This is **intervention-supported policy evidence**. It does not establish a unique internal reasoning failure and does not imply broad reliability beyond the pinned evaluation cases.
+
+## Mission 04: Regression Vault and deterministic suite gate
+
+Mission 04 adds immutable `RegressionCase` versions derived from executed scenarios, reconstructible fixture references, frozen `EvaluationSuiteSnapshot` records, fresh baseline/candidate execution for each case, and deterministic transition classification:
+
+- `PASS -> PASS`: preserved
+- `FAIL -> PASS`: improved
+- `PASS -> FAIL`: regression
+- `FAIL -> FAIL`: unresolved
+
+A regression is never inferred from a historical failure alone; it requires a fresh baseline pass and candidate failure under the same pinned case. The gate can reject on an established regression even when another pair is incomplete, while incomplete coverage can never produce acceptance.
+
+Reliability metrics are computed only from executed case pairs and always retain denominators/coverage. No synthetic AI reliability score is used.
+
+## Mission 05 — provider-neutral model boundary
+
+Mission 05 adds model-backed execution without replacing deterministic authority.
+
+```text
+                    +--------------------+
+                    |   ModelTransport   |
+                    +----------+---------+
+                               |
+              +----------------+----------------+
+              |                                 |
+      +-------v--------+                +-------v----------------+
+      |   ModelAgent   |                | ModelReasoningProvider |
+      +-------+--------+                +-----------+------------+
+              |                                     |
+     allowlisted 3-tool port                 grounded evidence only
+              |                                     |
+      +-------v--------+                    +-------v--------+
+      | Virtual Files  |                    | Diagnosis      |
+      | / report write |                    | Validator      |
+      +-------+--------+                    +-------+--------+
+              |                                     |
+      deterministic task                    repair eligibility
+         validator remains                  remains deterministic
+          authoritative
+```
+
+The two model roles are configured independently. Provider-specific request formats live only in transport adapters. The default path remains the scripted agent plus deterministic `MockProvider`, so Missions 02–04 keep working without credentials.
+
+Model/provider activity uses the existing `TraceEvent` record with `kind=model`; fact extraction ignores these events so a model-generated diagnosis cannot become a deterministic fact by recursion. Provider/harness failures are treated as invalid evaluation evidence rather than task regressions.

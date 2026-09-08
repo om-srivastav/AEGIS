@@ -67,3 +67,28 @@ PYTHONPATH=backend pytest -q backend/tests
 ```
 
 At the Mission 03 checkpoint the full suite reports **33 passed**.
+
+## Mission 04 checkpoint
+
+AEGIS now includes a deterministic regression vault and suite evaluator. Historical cases are immutable/versioned, suite membership is frozen before execution, every selected case is replayed fresh under baseline and candidate policies, and transitions are classified as preserved, improved, regression, or unresolved.
+
+Current verified test status: **43 passing tests**. The current bounded recovery policy improves the moved-resource case, preserves the clean case, and leaves the field-renamed historical failure unresolved. No real pass-to-fail regression exists in the current deterministic perturbation set, so AEGIS does not fabricate a rejection demonstration.
+
+## Mission 05 checkpoint — model-backed execution boundary
+
+AEGIS now supports two independently configurable model roles while keeping deterministic behavior as the default:
+
+- a bounded **model Agent Under Test** behind a provider-neutral `ModelTransport`, with only `list_files`, `read_file`, and `write_report`;
+- a **model-backed diagnostic ReasoningProvider** that receives only an allowlisted grounded evidence projection and still must pass the existing Mission 02 `DiagnosisValidator`.
+
+The runner does not secretly solve the task for the model. A successful `write_report` means execution completed; the unchanged deterministic sales validator separately decides whether the report is correct. Provider/harness failures are not admitted as genuine task regressions.
+
+Mission 05 deterministic verification:
+
+```bash
+PYTHONPATH=backend pytest -q backend/tests -m "not live"
+```
+
+Verified result: **68 passed, 2 deselected**. Running the complete test tree with live provider tests disabled yields **68 passed, 2 skipped**.
+
+No live external model/provider execution was performed for this checkpoint. See `docs/mission05-model-backed-agents.md` and `docs/mission05_execution_report.md` for the exact boundaries and verification status.
