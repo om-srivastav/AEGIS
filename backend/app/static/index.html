@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="theme-color" content="#09090b"/>
+  <title>AEGIS — Agent Reliability Lab</title>
+  <style>
+    :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#09090b;color:#f4f4f5}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -10%,#1f2937 0,#09090b 36%);min-height:100vh}.shell{max-width:1180px;margin:0 auto;padding:0 24px 60px}.topbar{height:76px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #27272a}.brand{font-weight:900;letter-spacing:.14em}.tag,.muted,.empty{color:#a1a1aa}.hero{display:grid;grid-template-columns:1.5fr .5fr;gap:32px;padding:54px 0 34px}.eyebrow{font-size:12px;letter-spacing:.2em;color:#a1a1aa;font-weight:700}.hero h1{font-size:clamp(42px,6vw,76px);line-height:.98;margin:12px 0 18px;max-width:850px;letter-spacing:-.04em}.lede{font-size:18px;line-height:1.6;color:#a1a1aa;max-width:760px}.scoreCard,.panel{border:1px solid #27272a;background:rgba(18,18,21,.88);backdrop-filter:blur(16px);border-radius:18px}.scoreCard{padding:26px;align-self:end;display:flex;flex-direction:column;gap:8px}.scoreCard span,.scoreCard small{color:#a1a1aa}.scoreCard strong{font-size:52px;letter-spacing:-.05em}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.panel{padding:22px}.panelTitle{font-weight:800;margin-bottom:16px}.choices{display:grid;gap:9px;margin:20px 0}.choice{padding:13px 14px;border-radius:12px;text-align:left;border:1px solid #27272a;background:#111113;color:#f4f4f5;cursor:pointer;display:flex;justify-content:space-between;gap:16px}.choice small{color:#71717a}.choice.active{border-color:#d4d4d8;background:#18181b}.runBtn{width:100%;padding:13px 16px;border-radius:12px;border:0;background:#f4f4f5;color:#09090b;font-weight:900;cursor:pointer}.runBtn:disabled{opacity:.6}.error{margin-top:12px;color:#fca5a5}.outcome{display:flex;align-items:center;gap:12px;padding:16px;border-radius:14px;margin:10px 0 15px}.outcome.ok{background:#10251a}.outcome.bad{background:#2b1518}.outcome div{display:flex;flex-direction:column}.outcome small{color:#a1a1aa}.validators{display:grid;gap:10px}.validation{display:flex;gap:9px;align-items:flex-start;padding:10px 0;border-top:1px solid #27272a}.validation div{display:flex;flex-direction:column;gap:3px}.validation small{color:#a1a1aa}.rootCause{margin-top:16px;border:1px solid #3f3f46;background:#111113;padding:14px;border-radius:12px;display:flex;flex-direction:column;gap:4px}.rootCause span,.rootCause small{color:#a1a1aa}.timelinePanel{margin-top:18px}.event{display:grid;grid-template-columns:44px 1fr;gap:14px;padding:13px 0;border-top:1px solid #27272a}.step{font-family:ui-monospace,monospace;color:#71717a}.eventType{font-family:ui-monospace,monospace;font-size:11px;color:#a1a1aa;text-transform:uppercase;margin-right:10px}.eventBody code{display:block;margin-top:7px;white-space:pre-wrap;color:#a1a1aa;font-size:11px}.empty{padding:34px 0;text-align:center}@media(max-width:760px){.hero,.grid{grid-template-columns:1fr}.tag{display:none}.choice{flex-direction:column}}
+  </style>
+</head>
+<body>
+<main class="shell">
+  <header class="topbar"><div class="brand">AEGIS</div><div class="tag">Agent Reliability Laboratory</div></header>
+  <section class="hero">
+    <div><p class="eyebrow">TEST · STRESS · DIAGNOSE · IMPROVE</p><h1>Find out why an AI agent fails.</h1><p class="lede">Run an agent in a controlled environment, inject a safe disturbance, capture the full trajectory, and verify the outcome against deterministic ground truth.</p></div>
+    <div class="scoreCard"><span>Reliability score</span><strong id="score">—</strong><small id="scoreMeta">No run yet</small></div>
+  </section>
+  <section class="grid">
+    <article class="panel">
+      <div class="panelTitle">Test scenario</div>
+      <p class="muted">Task: read sales.csv, calculate total revenue + order count, and write report.json.</p>
+      <div class="choices" id="choices"></div>
+      <button class="runBtn" id="runBtn">Run experiment</button>
+      <div class="error" id="error"></div>
+    </article>
+    <article class="panel">
+      <div class="panelTitle">Outcome</div>
+      <div id="outcome" class="empty">Run a baseline or stress scenario to see evidence.</div>
+    </article>
+  </section>
+  <section class="panel timelinePanel">
+    <div class="panelTitle">Execution trace</div>
+    <div id="timeline" class="empty">The ordered evidence timeline will appear here.</div>
+  </section>
+</main>
+<script>
+const scenarios=[
+ ['none','Baseline','Perfect environment'],
+ ['file_moved','Moved Resource','Expected file changes location'],
+ ['field_renamed','Schema Drift','Input field is renamed'],
+ ['tool_timeout','Tool Timeout','First read fails temporarily'],
+ ['partial_response','Partial Response','Tool returns incomplete data']
+];
+let selected='none';
+const choices=document.getElementById('choices');
+function drawChoices(){choices.innerHTML='';scenarios.forEach(([value,label,hint])=>{const b=document.createElement('button');b.className='choice'+(selected===value?' active':'');b.innerHTML=`<span>${label}</span><small>${hint}</small>`;b.onclick=()=>{selected=value;drawChoices()};choices.appendChild(b);});}
+drawChoices();
+function esc(v){return String(v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+document.getElementById('runBtn').onclick=async()=>{
+ const btn=document.getElementById('runBtn'),err=document.getElementById('error'); btn.disabled=true;btn.textContent='Running…';err.textContent='';
+ try{
+  const r=await fetch('/api/runs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({perturbation:selected})});
+  if(!r.ok) throw new Error('Backend returned '+r.status); const run=await r.json(); render(run);
+ }catch(e){err.textContent=e.message||'Run failed'}finally{btn.disabled=false;btn.textContent='Run experiment'}
+};
+function render(run){
+ document.getElementById('score').textContent=Math.round(run.score*100)+'%';
+ document.getElementById('scoreMeta').textContent=run.status.toUpperCase()+' · '+run.perturbation;
+ const ok=run.status==='passed'; const root=run.events.find(e=>e.payload&&e.payload.error_type);
+ document.getElementById('outcome').className='';
+ document.getElementById('outcome').innerHTML=`<div class="outcome ${ok?'ok':'bad'}"><div><strong>${ok?'PASS':'FAIL'}</strong><small>${Math.round(run.score*100)}% validator score</small></div></div><div class="validators">${run.validations.map(v=>`<div class="validation"><div><strong>${v.passed?'✓':'✗'} ${esc(v.name)}</strong><small>${esc(v.details)}</small></div></div>`).join('')}</div>${root?`<div class="rootCause"><span>Observed failure evidence</span><strong>${esc(root.payload.error_type)}</strong><small>${esc(root.payload.error)}</small></div>`:''}`;
+ document.getElementById('timeline').className='';
+ document.getElementById('timeline').innerHTML=run.events.map(e=>`<div class="event"><div class="step">${String(e.step).padStart(2,'0')}</div><div class="eventBody"><div><span class="eventType">${esc(e.type)}</span><strong>${esc(e.message)}</strong></div>${Object.keys(e.payload||{}).length?`<code>${esc(JSON.stringify(e.payload))}</code>`:''}</div></div>`).join('');
+}
+</script>
+</body>
+</html>
