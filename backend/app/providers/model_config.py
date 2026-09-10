@@ -27,7 +27,7 @@ def read_model_config(prefix: str) -> ModelConfig:
     api_key = os.environ.get(f"{prefix}_API_KEY", "")
     if not provider or not model or not api_key:
         raise ValueError(f"incomplete_model_configuration:{prefix}")
-    if provider != "anthropic":
+    if provider not in ("anthropic", "gemini"):
         raise ValueError(f"unsupported_provider:{prefix}")
 
     values = {}
@@ -71,4 +71,7 @@ def build_transport(config: ModelConfig):
     if config.provider == "anthropic":
         from app.providers.anthropic_transport import AnthropicTransport
         return AnthropicTransport(config.api_key)
+    if config.provider == "gemini":
+        from app.providers.gemini_transport import GeminiTransport
+        return GeminiTransport(config.api_key)
     raise ValueError("unsupported_provider")
