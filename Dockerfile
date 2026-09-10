@@ -25,4 +25,6 @@ COPY --from=frontend-build /app/frontend/dist ./backend/app/static
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "python -m uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port ${PORT:-8000}"]
+# One process owns the in-memory run/diagnosis/regression stores.
+# exec forwards container termination to Uvicorn instead of leaving sh as PID 1.
+CMD ["sh", "-c", "exec python -m uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port \"${PORT:-8000}\" --workers 1"]
