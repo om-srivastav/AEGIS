@@ -1,109 +1,105 @@
-# AEGIS Architecture — Locked Core
+# AEGIS Architecture — Final M07 Overview
 
 ## Core loop
 
-Agent Under Test -> Controlled Environment -> Trace Recorder -> Deterministic Validators -> Failure Diagnosis -> Repair Proposal -> Replay -> Regression Gate -> Reliability Report
-
-## Design rule
-
-AEGIS is model-agnostic. Astra may be used heavily during development and can be plugged in as a diagnostic/provider or as an Agent Under Test, but no core subsystem depends on Astra specifically.
-
-## Current first task
-
-`SalesReportTask`: read a small sales CSV and create an exact JSON report.
-
-Why start here: the task has deterministic ground truth, so AEGIS can prove whether its tracing and perturbation machinery works before we add an LLM. The demo will later graduate to a model-backed workflow agent while keeping the same adapter interfaces.
-
-## Event model
-
-Each run records ordered events: run_started, observation, decision, tool_call, tool_result, perturbation, validation, run_finished.
-
-The trace is the evidence substrate used later by the diagnostic engine.
-
-## Mission 02: grounded diagnosis contracts
-
-AEGIS separates three evidence levels:
-
-1. **Executed Fact** — created by deterministic code from trace events, environment state, or validators.
-2. **Model Inference** — a bounded hypothesis produced by a `ReasoningProvider` and linked to verified facts.
-3. **Experimental Causal Evidence** — only available after a controlled fresh replay/intervention changes measured behavior.
-
-Therefore an initial diagnosis uses the term **earliest supported causal candidate**, not proven root cause. A perturbation trigger (for example, a moved file) is also kept separate from the agent failure category (for example, recovery failure).
-
-The current Mission 02 pipeline is:
-
 ```text
-RunRecord -> FactExtractor -> VerifiedFact + FailureObservation
-          -> ReasoningProvider (MockProvider for now)
-          -> DiagnosisCandidate
-          -> DiagnosisValidator
-          -> supported / inconclusive / rejected Diagnosis
+TEST -> STRESS -> FAIL -> DIAGNOSE -> REPAIR -> REPLAY -> REGRESSION TEST -> MEASURE
 ```
 
-`DiagnosisValidator` checks run scope, event/fact existence, fact-source alignment, claimed values, chronology, validation references, allowed evidence bundles, confidence bounds (schema), and trace completeness for absence claims.
+AEGIS is an engineering laboratory for evaluating and improving autonomous-agent reliability under controlled, replayable conditions.
 
-No repair or replay logic is included in this phase.
+## Governing rule
 
-## Mission 03: intervention-supported policy effect
+**Models may reason; deterministic systems establish facts.**
 
-Mission 03 adds one versioned `AgentPolicy` component: `resource_reobservation`. The baseline and candidate configurations are behaviorally identical except for `enabled: false -> true`.
+A model may interpret a trajectory, propose hypotheses, or suggest a bounded repair. It cannot fabricate tool results, environment state, trace events, validator outcomes, regression results, or measured improvement.
 
-The task contract owns the logical resource identity (`sales_input`). When the original path is moved, the environment preserves that identity on the moved file. Recovery may discover only within the task's allowed scope and may select only one exact unique identity match. Filename similarity, CSV schema similarity, and content inspection are not recovery criteria.
+## System flow
 
-The moved-file perturbation activates semantically on the first read of the declared original path. The trace therefore contains a trusted activation event before the corresponding `FILE_NOT_FOUND` result. Candidate recovery must occur after this verified exposure.
+```text
+Scenario / Perturbation
+        |
+        v
+   Agent Under Test
+        |
+        v
+  Tool / Environment
+        |
+        v
+ Ordered Trace + Artifacts
+        |
+        +----------------------+
+        |                      |
+        v                      v
+Deterministic Validator   Evidence Projection
+        |                      |
+        |                      v
+        |               ReasoningProvider
+        |                      |
+        |                      v
+        |              DiagnosisValidator
+        |                      |
+        +-----------+----------+
+                    |
+                    v
+            Constrained Repair
+                    |
+                    v
+               Fresh Replay
+                    |
+                    v
+            Regression Suite
+                    |
+                    v
+           Reliability Metrics
+```
 
-Fresh evaluation executes paired baseline/candidate runs for both moved and clean cases. The gate has three outcomes:
+## Mission summary
 
-- `ACCEPT`: moved baseline fails, moved candidate passes after verified exposure and bounded recovery, both clean arms pass, and clean candidate does not recover.
-- `REJECT`: a valid comparable experiment shows candidate failure, clean regression, or policy-bound violation.
-- `INCONCLUSIVE`: the experiment is not trustworthy enough to compare, such as a manifest mismatch or missing perturbation activation.
+**M01 — Deterministic foundation.** FastAPI, virtual file environment, scripted Sales Report Agent, ordered traces, controlled perturbations, and deterministic validators.
 
-The scoped causal statement is:
+**M02 — Grounded diagnosis.** Executed facts, failure observations, evidence references, `ReasoningProvider`, and `DiagnosisValidator`. AEGIS reports an **earliest supported causal candidate**, not causal proof.
 
-> Enabling the bounded resource re-observation policy changed the moved-resource scenario from failure to success under matched deterministic conditions; the clean case remained correct.
+**M03 — Constrained repair + fresh replay.** The current bounded repair changes:
 
-This is **intervention-supported policy evidence**. It does not establish a unique internal reasoning failure and does not imply broad reliability beyond the pinned evaluation cases.
+```text
+resource_reobservation.enabled: false -> true
+```
 
-## Mission 04: Regression Vault and deterministic suite gate
+Recovery is limited to one file listing and one exact logical-resource retry. Fresh baseline/candidate runs are compared under matched conditions.
 
-Mission 04 adds immutable `RegressionCase` versions derived from executed scenarios, reconstructible fixture references, frozen `EvaluationSuiteSnapshot` records, fresh baseline/candidate execution for each case, and deterministic transition classification:
+**M04 — Regression vault + deterministic gate.** Immutable/versioned cases, frozen suite snapshots, fresh re-execution, and transition classification:
 
 - `PASS -> PASS`: preserved
 - `FAIL -> PASS`: improved
 - `PASS -> FAIL`: regression
 - `FAIL -> FAIL`: unresolved
 
-A regression is never inferred from a historical failure alone; it requires a fresh baseline pass and candidate failure under the same pinned case. The gate can reject on an established regression even when another pair is incomplete, while incomplete coverage can never produce acceptance.
+**M05 — Provider-neutral model boundary.** Independent model Agent Under Test and model-backed diagnostic ReasoningProvider behind provider-neutral transports. Deterministic validation remains authoritative. The real Gemini Agent Under Test live path succeeded; live diagnosis and combined live flow remain **BLOCKED / UNVERIFIED** after external HTTP 503 responses.
 
-Reliability metrics are computed only from executed case pairs and always retain denominators/coverage. No synthetic AI reliability score is used.
+**M06 — Reliability dashboard.** React/TypeScript/Vite UI for the full reliability loop against the real FastAPI backend.
 
-## Mission 05 — provider-neutral model boundary
+**M07 — Production delivery.** Single Docker-built Railway service. Node builds Vite, compiled assets are copied into `backend/app/static`, and FastAPI serves `/`, `/assets/*`, `/health`, and `/api/*` from one origin.
 
-Mission 05 adds model-backed execution without replacing deterministic authority.
+## State model
 
-```text
-                    +--------------------+
-                    |   ModelTransport   |
-                    +----------+---------+
-                               |
-              +----------------+----------------+
-              |                                 |
-      +-------v--------+                +-------v----------------+
-      |   ModelAgent   |                | ModelReasoningProvider |
-      +-------+--------+                +-----------+------------+
-              |                                     |
-     allowlisted 3-tool port                 grounded evidence only
-              |                                     |
-      +-------v--------+                    +-------v--------+
-      | Virtual Files  |                    | Diagnosis      |
-      | / report write |                    | Validator      |
-      +-------+--------+                    +-------+--------+
-              |                                     |
-      deterministic task                    repair eligibility
-         validator remains                  remains deterministic
-          authoritative
-```
+Runs, diagnoses, repairs, evaluations, regression cases, and idempotency records are currently process-local.
 
-The two model roles are configured independently. Provider-specific request formats live only in transport adapters. The default path remains the scripted agent plus deterministic `MockProvider`, so Missions 02–04 keep working without credentials.
+Therefore:
 
-Model/provider activity uses the existing `TraceEvent` record with `kind=model`; fact extraction ignores these events so a model-generated diagnosis cannot become a deterministic fact by recursion. Provider/harness failures are treated as invalid evaluation evidence rather than task regressions.
+- one Uvicorn worker and one Railway replica are required;
+- restart/redeploy resets history;
+- old browser-held IDs may return `run not found` after process replacement;
+- this is a bounded portfolio/demo deployment, not a durable multi-user service.
+
+## Final verified state
+
+- Backend full suite with live tests disabled: **169 passed, 3 skipped, 1 existing warning**
+- Frontend production build: **PASS**
+- Public Railway deployment: **ACTIVE**
+- Deployed deterministic loop: **8/8 stages verified**
+- Deployed suite: **2/2 valid pairs, 1 improvement, 0 regressions, 0 unresolved**
+- Baseline success: **50%**
+- Candidate success: **100%**
+
+These metrics apply only to the pinned deterministic two-case experiment.
